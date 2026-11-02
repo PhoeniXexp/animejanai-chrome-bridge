@@ -1,0 +1,1 @@
+{"private":true,"type":"module","scripts":{"test":"powershell -NoProfile -File tests/Run.ps1"}}

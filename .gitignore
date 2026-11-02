@@ -1,0 +1,4 @@
+native/*.exe
+tests/*.exe
+work/
+*.zip
