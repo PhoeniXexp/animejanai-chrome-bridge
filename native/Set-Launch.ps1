@@ -6,7 +6,7 @@ if(-not $PSBoundParameters.ContainsKey('InstallDir')){
   if(Test-Path -LiteralPath $registration){$InstallDir=Split-Path ([string](Get-Item -LiteralPath $registration).GetValue('')) -Parent}
 }
 $file=Join-Path $InstallDir 'config.json'
-$cfg=Get-Content -LiteralPath $file -Raw | ConvertFrom-Json
+$cfg=Get-Content -LiteralPath $file -Raw -Encoding UTF8 | ConvertFrom-Json
 $cfg.enableLaunch=$Enabled
 $utf8=New-Object System.Text.UTF8Encoding($false)
 [IO.File]::WriteAllText($file,($cfg | ConvertTo-Json -Depth 5),$utf8)

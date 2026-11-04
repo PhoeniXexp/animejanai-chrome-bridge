@@ -13,8 +13,8 @@ $deleteFiles=@()
 if($RemoveFiles -and (Test-Path -LiteralPath $InstallDir)){
   $directory=Get-Item -LiteralPath $InstallDir
   if(-not $directory.PSIsContainer -or ($directory.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Refusing removal: install directory is not a regular folder.' }
-  $manifest=Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-  $config=Get-Content -LiteralPath (Join-Path $InstallDir 'config.json') -Raw | ConvertFrom-Json
+  $manifest=Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+  $config=Get-Content -LiteralPath (Join-Path $InstallDir 'config.json') -Raw -Encoding UTF8 | ConvertFrom-Json
   if($manifest.name -ne 'com.animejanai.chrome_bridge' -or $manifest.path -ne (Join-Path $InstallDir 'AnimeJaNaiBridge.exe') -or $config.extensionId -cnotmatch '^[a-p]{32}$' -or $manifest.allowed_origins.Count -ne 1 -or $manifest.allowed_origins[0] -ne "chrome-extension://$($config.extensionId)/") { throw 'Refusing removal: host ownership checks failed.' }
   foreach($item in (Get-ChildItem -LiteralPath $InstallDir -Force)){
     if($item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -or $item.Name -notin $knownFiles) { throw 'Refusing removal: unknown files or links exist. Use unregister only and review the folder manually.' }

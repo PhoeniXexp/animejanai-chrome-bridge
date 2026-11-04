@@ -1,4 +1,5 @@
 $ErrorActionPreference='Stop'
+& (Join-Path $PSScriptRoot 'Encoding.Tests.ps1')
 & (Join-Path $PSScriptRoot '..\native\Build.ps1')
 $compiler=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $hostExe=Join-Path $PSScriptRoot '..\native\AnimeJaNaiBridge.exe'

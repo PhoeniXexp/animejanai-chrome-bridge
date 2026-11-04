@@ -11,7 +11,7 @@ $key='HKCU:\Software\Google\Chrome\NativeMessagingHosts\com.animejanai.chrome_br
 if(Test-Path -LiteralPath $key){
   $manifestFile=[string](Get-Item -LiteralPath $key).GetValue('')
   $dir=Split-Path $manifestFile -Parent
-  $manifest=Get-Content -LiteralPath $manifestFile -Raw | ConvertFrom-Json
+  $manifest=Get-Content -LiteralPath $manifestFile -Raw -Encoding UTF8 | ConvertFrom-Json
   $exe=Join-Path $dir 'AnimeJaNaiBridge.exe'
   if($manifest.name -ne 'com.animejanai.chrome_bridge' -or $manifest.path -ne $exe){throw 'Registration belongs to another layout. No changes made.'}
   $built=Join-Path $PSScriptRoot 'AnimeJaNaiBridge.exe'
