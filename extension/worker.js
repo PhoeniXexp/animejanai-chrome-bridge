@@ -36,7 +36,7 @@ async function current(s) {
   return t;
 }
 function observe(d) {
-  if (!/\.m3u8(?:\?|$)/i.test(d.url)) return;
+  if (!/\.(?:m3u8|mpd)(?:\?|$)/i.test(d.url)) return;
   void serial(async () => {
     const {config} = await chrome.storage.local.get('config');
     try {
@@ -108,7 +108,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       const target=playerFrame.documentId ? {tabId:s.tabId,documentIds:[playerFrame.documentId]} : {tabId:s.tabId,frameIds:[item.frameId]};
       const results=await chrome.scripting.executeScript({target,func:pauseAndReadPosition});
       playback=results[0]?.result;
-    }catch {return {ok:false,error:'Не удалось обратиться к видео Kodik. Проверьте разрешение на домен плеера. Запуск отменён.'};}
+    }catch {return {ok:false,error:'Не удалось обратиться к видео плеера. Проверьте разрешение на домен плеера. Запуск отменён.'};}
     if(!playback?.ok) return {ok:false,error:playback?.error || 'Не удалось прочитать время видео. Запуск отменён.'};
     if (s.lastLaunch && Date.now()-s.lastLaunch < 10_000) throw Error('Подождите 10 секунд перед повторным запуском.');
     s.lastLaunch=Date.now(); await save(s);

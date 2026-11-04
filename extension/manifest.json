@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "AnimeJaNai — Kodik bridge",
-  "version": "0.5.0",
+  "name": "AnimeJaNai — Chrome bridge",
+  "version": "0.6.0",
   "minimum_chrome_version": "120",
-  "description": "Поиск HLS в выбранной вкладке и ручной запуск AnimeJaNai.",
+  "description": "Поиск HLS / DASH в выбранной вкладке и ручной запуск AnimeJaNai.",
   "permissions": ["activeTab", "storage", "webRequest", "webNavigation", "nativeMessaging", "alarms", "scripting"],
   "optional_host_permissions": ["https://*/*"],
   "background": {"service_worker": "worker.js", "type": "module"},

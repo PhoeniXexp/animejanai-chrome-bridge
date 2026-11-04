@@ -65,5 +65,28 @@ test('worker capture, tab isolation, safe launch, cooldown, navigation and expir
   assert.equal((await send('list')).items.length,0,'auto capture can be disabled');
   local.config.autoCapture=true;tab.url='https://unrelated.example/';handlers.completed({...d,timeStamp:Date.now()+1});
   assert.equal((await send('list')).items.length,0,'unconfigured top-level page is ignored');
+  local.config={sites:['animego.me'],dynamicStreams:true};
+  tab.url='https://animego.me/anime/sample';
+  const aniboomFrame={frameId:8,parentFrameId:0,documentId:'aniboom-doc',url:'https://aniboom.one/embed/sample?episode=1'};
+  chrome.webNavigation.getAllFrames=async()=>[aniboomFrame];
+  const dash={...d,frameId:8,initiator:'https://aniboom.one',timeStamp:Date.now()+1,url:'https://cdn.example/episode.mpd?token=synthetic'};
+  handlers.completed({...dash,url:'https://cdn.example/chunk.m4s'});
+  assert.equal((await send('list')).items.length,0,'DASH segments are not playlists');
+  handlers.completed({...dash,initiator:'https://ads.example'});
+  assert.equal((await send('list')).items.length,0,'unrelated initiator rejected');
+  handlers.completed(dash);handlers.completed(dash);
+  const dashList=await send('list');assert.equal(dashList.items.length,1,'DASH captured and deduplicated');
+  paused=false;
+  chrome.scripting.executeScript=async({target})=>{
+    assert.deepEqual(target,{tabId:4,documentIds:['aniboom-doc']});
+    paused=true;return [{result:{ok:true,startSeconds:152.25}}];
+  };
+  chrome.runtime.sendNativeMessage=async(_h,m)=>{
+    assert.equal(paused,true);assert.equal(m.url,dash.url);assert.equal(m.frame,aniboomFrame.url);
+    assert.equal(m.startSeconds,152.25);return {ok:true,dryRun:true};
+  };
+  assert.equal((await send('open',{id:dashList.items[0].id})).ok,true,'DASH launch targets the captured player document');
+  handlers.committed({tabId:4,frameId:8});
+  assert.equal((await send('list')).items.length,0,'AniBoom episode navigation invalidates captured stream');
 });
 

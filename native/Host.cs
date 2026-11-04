@@ -28,7 +28,7 @@ namespace AnimeJaNaiBridge {
       Uri u;
       if (!Uri.TryCreate(raw, UriKind.Absolute, out u) || u.Scheme != "https" || !u.IsDefaultPort || u.UserInfo != "" || u.Fragment != "" || !Host(u.DnsSafeHost)) throw new Exception("url");
       if(hosts!=null && Array.IndexOf(hosts,u.DnsSafeHost)<0)throw new Exception("domain");
-      if (playlist && !u.AbsolutePath.EndsWith(".m3u8",StringComparison.OrdinalIgnoreCase)) throw new Exception("playlist");
+      if (playlist && !u.AbsolutePath.EndsWith(".m3u8",StringComparison.OrdinalIgnoreCase) && !u.AbsolutePath.EndsWith(".mpd",StringComparison.OrdinalIgnoreCase)) throw new Exception("playlist");
       return u;
     }
     public static string Quote(string value) {
@@ -72,7 +72,7 @@ namespace AnimeJaNaiBridge {
     }
     static object Handle(Dictionary<string,object> m,Config c) {
       string op=Get(m,"op");
-      if(op=="ping") return new {ok=true,dryRun=!c.enableLaunch,version="0.5.0"};
+      if(op=="ping") return new {ok=true,dryRun=!c.enableLaunch,version="0.6.0"};
       object syncValue; bool sync=m.TryGetValue("sync",out syncValue) && syncValue is bool && (bool)syncValue;
       if(op!="open" || (m.Count!=4 && m.Count!=5 && !(m.Count==6 && sync)))throw new Exception("message");
       if(m.ContainsKey("sync") && (!sync || m.Count!=6))throw new Exception("message");
@@ -139,7 +139,7 @@ namespace AnimeJaNaiBridge {
         case "duplicate":return "Повторный запуск: подождите 10 секунд.";
         case "player":return "Не найден exe плеера. Запустите install.cmd и укажите путь к mpvnet.exe.";
         case "origin":return "ID расширения не совпадает с регистрацией хоста.";
-        case "url":case "playlist":return "Недопустимый URL: требуется HTTPS HLS без локальных адресов.";
+        case "url":case "playlist":return "Недопустимый URL: требуется HTTPS HLS (.m3u8) или DASH (.mpd) без локальных адресов.";
         case "position":return "Недопустимое время воспроизведения.";
         case "config":return "Некорректная настройка хоста. Повторите install.cmd.";
         case "message":return "Версии расширения и хоста несовместимы. Обновите оба компонента.";

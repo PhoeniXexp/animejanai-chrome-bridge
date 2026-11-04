@@ -7,6 +7,22 @@ const now=1_000_000;
 const s={tabId:4,started:now-100};
 const f=[{frameId:2,url:'https://kodik.example/serial/episode'}];
 const d={url:'https://cdn.example/episode/720.m3u8?token=private',tabId:4,frameId:2,initiator:'https://kodik.example',timeStamp:now,statusCode:200};
+test('AniBoom accepts DASH/HLS from its embed document and rejects unrelated requests',()=>{
+  const dynamic={sites:['animego.me'],dynamicStreams:true};
+  const frames=[{frameId:2,url:'https://aniboom.one/embed/sample?episode=1&translation=11'}];
+  const request={...d,url:'https://cdn.example/episode.MPD?token=synthetic',initiator:'https://aniboom.one'};
+  assert.equal(accept(request,s,frames,dynamic,now),true);
+  assert.equal(accept({...request,url:d.url},s,frames,dynamic,now),true);
+  for(const change of [{frameId:0},{frameId:3},{tabId:5},{initiator:'https://ads.example'},{statusCode:403},
+    {url:'https://cdn.example/chunk.m4s'},{url:'https://cdn.example/ad.mp4'},
+    {url:'https://cdn.example/a.mpd.exe'},{url:'https://cdn.example/a?file=x.mpd'},
+    {url:'https://127.0.0.1/a.mpd'},{url:'http://cdn.example/a.mpd'},
+    {url:'https://u:p@cdn.example/a.mpd'},{url:'https://cdn.example/a.mpd#x'}])
+    assert.equal(accept({...request,...change},s,frames,dynamic,now),false,JSON.stringify(change));
+  for(const url of ['https://aniboom.one/ads','https://aniboom.one/embed/',
+    'https://aniboom.one.evil.example/embed/sample','https://other.example/embed/sample'])
+    assert.equal(accept({...request,initiator:new URL(url).origin},s,[{frameId:2,url}],dynamic,now),false,url);
+});
 test('accepts only fresh allowed HLS in the armed Kodik frame',()=>assert.equal(accept(d,s,f,cfg,now),true));
 test('site-only setup accepts a new CDN and discovers serial iframe while rejecting ad frames',()=>{
   const dynamic={sites:['anime.example'],dynamicStreams:true};

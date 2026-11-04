@@ -1,4 +1,4 @@
-// Runs only in the selected Kodik document, in Chrome's isolated world.
+// Runs only in the selected player document, in Chrome's isolated world.
 export function pauseAndReadPosition() {
   const videos=[...document.querySelectorAll('video')].filter(v=>{
     const r=v.getBoundingClientRect();
@@ -9,7 +9,7 @@ export function pauseAndReadPosition() {
   const time=v?.currentTime, duration=v?.duration, seeking=v?.seeking;
   // On an ambiguous page pause all visible videos, but do not guess which time to send.
   for(const v of videos) v.pause();
-  if(videos.length!==1) return {ok:false,error:'Не удалось однозначно выбрать видео Kodik. Видимые видео поставлены на паузу.'};
+  if(videos.length!==1) return {ok:false,error:'Не удалось однозначно выбрать видео плеера. Видимые видео поставлены на паузу.'};
   if(!Number.isFinite(time) || time<0 || time>86400 || !Number.isFinite(duration) || seeking)
     return {ok:false,error:'Видео на паузе, но время пока недоступно. Дождитесь завершения перемотки и повторите.'};
   const token=crypto.randomUUID();

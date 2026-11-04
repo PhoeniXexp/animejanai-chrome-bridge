@@ -8,6 +8,8 @@ class PolicyTests {
   static int Main() {
     string[] hosts={"cdn.example"};
     Check(Policy.Url("https://cdn.example/a.m3u8?x=1&y=2",hosts,true).Host==hosts[0]);
+    Check(Policy.Url("https://cdn.example/a.MPD?x=1&y=2",hosts,true).Host==hosts[0]);
+    foreach(string raw in new[]{"https://cdn.example/chunk.m4s","https://cdn.example/a.mpd.exe","https://cdn.example/a?file=a.mpd","https://127.0.0.1/a.mpd","http://cdn.example/a.mpd","https://u:p@cdn.example/a.mpd"}) Reject(()=>Policy.Url(raw,hosts,true));
     foreach(string raw in new[]{"--script=evil","http://cdn.example/a.m3u8","https://cdn.example/a.ts","https://cdn.example.evil.org/a.m3u8","https://u:p@cdn.example/a.m3u8","https://127.0.0.1/a.m3u8","https://[::1]/a.m3u8","https://cdn.example:81/a.m3u8","https://cdn.example/a.m3u8#fragment","https://cdn.example/a\n.m3u8","https://cdn.example/a\".m3u8"}) Reject(()=>Policy.Url(raw,hosts,true));
     Check(Policy.Quote("a b")=="\"a b\"");
     Check(Policy.Quote("a\\")=="\"a\\\\\"");

@@ -24,7 +24,7 @@ async function list(){
     }catch(e){status(e.message);}finally{b.disabled=!!r.overflow;}};
     row.append(text,b); $('items').append(row);
   }
-  if(!r.items.length) status('Поток пока не замечен. Запустите или перезапустите видео в Kodik. Уже загруженные до включения расширения потоки могут быть недоступны.');
+  if(!r.items.length) status('Поток пока не замечен. Запустите или перезапустите видео на сайте. Уже загруженные до включения расширения потоки могут быть недоступны.');
 }
 action('refresh',list);
 action('clear',async()=>{await send('clear');await list();});
@@ -38,7 +38,7 @@ action('save',async()=>{
   const removed=(old.origins||[]).filter(x=>!origins.includes(x));
   if(removed.length) await chrome.permissions.remove({origins:removed});
   cfg.autoCapture=$('autoCapture').checked;
-  await chrome.storage.local.set({config:cfg});await send('resetAll');status('Настройки сохранены. Запустите видео в Kodik.');
+  await chrome.storage.local.set({config:cfg});await send('resetAll');status('Настройки сохранены. Запустите видео на сайте.');
 });
 action('connection',async()=>{const r=await send('ping');status(`Хост ${r.version || '?'} отвечает. ${r.dryRun?'Тестовый режим: запуск отключён.':'Запуск плеера включён.'}`);});
 action('revoke',async()=>{const p=await chrome.permissions.getAll();if(p.origins?.length) await chrome.permissions.remove({origins:p.origins});await chrome.storage.local.clear();await send('resetAll');$('sites').value='';status('Доступ отозван.');});

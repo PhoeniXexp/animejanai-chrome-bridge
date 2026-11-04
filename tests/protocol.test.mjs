@@ -41,16 +41,20 @@ test('native protocol, invalid input, dry-run, detached player and cooldown',asy
     const denied=await run(exe,frame({...valid,url:'https://new-cdn.example/720.m3u8'}));
     assert.match(denied[0].error,/Домен потока/);
     cfg.dynamicStreams=true;await save();
+    const dash={...valid,url:'https://new-cdn.example/episode.mpd?token=synthetic',frame:'https://aniboom.one/embed/sample?episode=1',page:'https://animego.me/anime/sample'};
+    assert.equal((await run(exe,frame(dash)))[0].ok,true,'DASH accepted by native host');
+    for(const url of ['https://new-cdn.example/chunk.m4s','https://new-cdn.example/a.mp4','https://127.0.0.1/a.mpd'])
+      assert.equal((await run(exe,frame({...dash,url})))[0].ok,false);
     assert.equal((await run(exe,frame({...valid,url:'https://new-cdn.example/720.m3u8'})))[0].ok,true,'dynamic CDN accepted without editing native config');
     assert.equal((await run(exe,frame({...valid,url:'https://127.0.0.1/720.m3u8'})))[0].ok,false);
     cfg.enableLaunch=true;await save();
-    assert.equal((await run(exe,frame(valid),origin,{ANIMEJANAI_TEST_MARKER:marker}))[0].ok,true);
+    assert.equal((await run(exe,frame(dash),origin,{ANIMEJANAI_TEST_MARKER:marker}))[0].ok,true);
     let args;for(let i=0;i<40;i++){try{args=await readFile(marker,'utf8');break;}catch{await new Promise(r=>setTimeout(r,50));}}
     assert.ok(args,'test player survived native host exit');
-    assert.deepEqual(args.trim().split(/\r?\n/),['--start=152.25','--',valid.url]);
+    assert.deepEqual(args.trim().split(/\r?\n/),['--start=152.25','--',dash.url]);
     assert.equal((await run(exe,frame(valid)))[0].ok,false,'cooldown across host processes');
     await rm(path.join(dir,'last-launch.txt'));
-    const sync=await run(exe,frame({...valid,sync:true}));
+    const sync=await run(exe,frame({...dash,sync:true}));
     assert.equal(sync[0].ok,true);assert.equal(sync[1].eventType,'tracking');assert.deepEqual(sync[2],{eventType:'closed',ok:true,position:450.75});
     await rm(path.join(dir,'last-launch.txt'));
     const changed=await run(exe,frame({...valid,sync:true}),origin,{ANIMEJANAI_TEST_CHANGE_FILE:'1'});
