@@ -1,4 +1,5 @@
-import {rejection, safeUrl, WINDOW_MS} from './core.mjs';
+import {rejection, safeUrl, supportedPlayerFrame, safePageUrl, WINDOW_MS} from './core.mjs';
+import {readLoadedPlaylist} from './recovery.mjs';
 import {pauseAndReadPosition,restorePosition} from './playback.mjs';
 import {openSynced} from './native-session.mjs';
 const HOST = 'com.animejanai.chrome_bridge';
@@ -32,8 +33,36 @@ chrome.alarms.onAlarm.addListener(alarm => {
 async function current(s) {
   if (!s || Date.now() - s.started > WINDOW_MS) throw Error('Поиск истёк. Начните заново.');
   const t = await chrome.tabs.get(s.tabId);
-  if (t.url !== s.page) throw Error('Страница изменилась. Начните поиск заново.');
+  if (safePageUrl(t.url)?.href !== safePageUrl(s.page)?.href) throw Error('Страница изменилась. Начните поиск заново.');
   return t;
+}
+async function recoverLoaded(tab) {
+  const {config}=await chrome.storage.local.get('config');
+  const page=safePageUrl(tab?.url);
+  if(!page || tab.incognito || !config?.sites?.includes(page.hostname) || config.autoCapture===false) return null;
+  const frames=await chrome.webNavigation.getAllFrames({tabId:tab.id});
+  const items=[];
+  for(const frame of (frames || []).filter(f=>f.frameId>0 && f.documentId && supportedPlayerFrame(f.url,config)).slice(0,20)) {
+    try {
+      const results=await chrome.scripting.executeScript({target:{tabId:tab.id,documentIds:[frame.documentId]},func:readLoadedPlaylist});
+      const result=results.find(r=>r.frameId===frame.frameId && r.documentId===frame.documentId)?.result;
+      const url=safeUrl(result?.url),now=Date.now();
+      if(!url || !/\.(?:m3u8|mpd)$/i.test(url.pathname) || result.frameUrl!==frame.url ||
+        !Number.isFinite(result.timeStamp) || result.timeStamp>now || now-result.timeStamp>WINDOW_MS ||
+        (!config.dynamicStreams && !config.cdn?.includes(url.hostname))) continue;
+      items.push({id:crypto.randomUUID(),url:result.url,frameId:frame.frameId,frameUrl:frame.url,documentId:frame.documentId,seen:result.timeStamp});
+    } catch { /* A player may navigate or deny script access during recovery. */ }
+  }
+  // Do not attach old results to a replacement page or player document.
+  const latest=await chrome.tabs.get(tab.id);
+  if(safePageUrl(latest.url)?.href!==safePageUrl(tab.url)?.href || latest.incognito) return null;
+  const live=await chrome.webNavigation.getAllFrames({tabId:tab.id});
+  const valid=items.filter(i=>live?.some(f=>f.documentId===i.documentId && f.frameId===i.frameId && f.url===i.frameUrl));
+  if(!valid.length) return null;
+  const s={tabId:tab.id,page:tab.url,started:Math.min(...valid.map(i=>i.seen)),items:valid};
+  await save(s);
+  await chrome.alarms.create(`capture-expiry:${tab.id}`,{when:s.started+WINDOW_MS});
+  return s;
 }
 function observe(d) {
   if (!/\.(?:m3u8|mpd)(?:\?|$)/i.test(d.url)) return;
@@ -44,7 +73,7 @@ function observe(d) {
       let s=await read(d.tabId);
       if(!s || Date.now()-s.started>WINDOW_MS){
         if(config.autoCapture===false) return;
-        const tab=await chrome.tabs.get(d.tabId),u=safeUrl(tab.url);
+        const tab=await chrome.tabs.get(d.tabId),u=safePageUrl(tab.url);
         if(tab.id!==d.tabId || tab.incognito || !u || !config.sites.includes(u.hostname)) return;
         s={tabId:d.tabId,page:tab.url,started:Math.min(Date.now(),d.timeStamp),items:[]};
         await chrome.alarms.create(`capture-expiry:${d.tabId}`,{when:s.started+WINDOW_MS});
@@ -80,7 +109,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     if (msg.op === 'arm') {
       const {config} = await chrome.storage.local.get('config');
       const [tab] = await chrome.tabs.query({active:true,currentWindow:true});
-      const u = safeUrl(tab?.url);
+      const u = safePageUrl(tab?.url);
       if (!u || !config?.sites.includes(u.hostname) || tab.incognito) throw Error('Откройте настроенную страницу AnimeGo.');
       const origins = config.dynamicStreams ? ['https://*/*'] : [...config.sites,...config.kodik,...config.cdn].map(h=>`https://${h}/*`);
       if (!await chrome.permissions.contains({origins})) throw Error('Сохраните домены и разрешите доступ.');
@@ -88,10 +117,12 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       await chrome.alarms.create(`capture-expiry:${tab.id}`,{when:Date.now()+WINDOW_MS});
       return {};
     }
-    const s = await read();
+    let s = await read();
     const [tab] = await chrome.tabs.query({active:true,currentWindow:true});
     if (msg.op === 'list') {
-      if (!s || s.tabId !== tab?.id || Date.now()-s.started > WINDOW_MS) { await drop(); return {items:[]}; }
+      if (!s || s.tabId !== tab?.id || Date.now()-s.started > WINDOW_MS) { await drop(); s=null; }
+      if(!s?.items.length && msg.recover!==false) s=(await recoverLoaded(tab)) || s;
+      if(!s) return {items:[]};
       await current(s);
       return {items:s.items, overflow:s.overflow,syncStatus:(await chrome.storage.session.get(`return:${tab.id}`))[`return:${tab.id}`]};
     }
@@ -101,7 +132,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     const item = s.items.find(x=>x.id===msg.id);
     if (!item || s.overflow) throw Error('Нужен новый поиск без переполнения.');
     const frames = await chrome.webNavigation.getAllFrames({tabId:s.tabId});
-    const playerFrame=frames?.find(f=>f.frameId===item.frameId && f.url===item.frameUrl);
+    const playerFrame=frames?.find(f=>f.frameId===item.frameId && f.url===item.frameUrl && (!item.documentId || item.documentId===f.documentId));
     if (!playerFrame) throw Error('Плеер сменился. Повторите поиск.');
     let playback;
     try {
@@ -113,7 +144,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     if (s.lastLaunch && Date.now()-s.lastLaunch < 10_000) throw Error('Подождите 10 секунд перед повторным запуском.');
     s.lastLaunch=Date.now(); await save(s);
     try {
-      const result=await openSynced(HOST,{op:'open',url:item.url,page:s.page,frame:item.frameUrl,startSeconds:playback.startSeconds},async event=>{
+      const result=await openSynced(HOST,{op:'open',url:item.url,page:safePageUrl(s.page).href,frame:item.frameUrl,startSeconds:playback.startSeconds},async event=>{
         const note=async text=>chrome.storage.session.set({[`return:${s.tabId}`]:text});
         if(event.eventType==='tracking'){await note('mpv подключён: после закрытия позиция вернётся в браузер.');return;}
         if(event.eventType!=='closed')return;
@@ -121,7 +152,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         try{
           const t=await chrome.tabs.get(s.tabId);
           const nowFrames=await chrome.webNavigation.getAllFrames({tabId:s.tabId});
-          if(t.url!==s.page || !playerFrame.documentId || !nowFrames?.some(f=>f.documentId===playerFrame.documentId && f.url===item.frameUrl))throw Error('changed');
+          if(safePageUrl(t.url)?.href!==safePageUrl(s.page)?.href || !playerFrame.documentId || !nowFrames?.some(f=>f.documentId===playerFrame.documentId && f.url===item.frameUrl))throw Error('changed');
           const session=await read(s.tabId);
           if(!session?.items.some(x=>x.id===item.id))throw Error('changed');
           const results=await chrome.scripting.executeScript({target:{tabId:s.tabId,documentIds:[playerFrame.documentId]},func:restorePosition,args:[playback.videoToken,event.position]});

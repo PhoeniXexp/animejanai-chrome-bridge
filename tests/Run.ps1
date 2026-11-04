@@ -11,5 +11,5 @@ if($LASTEXITCODE -ne 0){throw 'Policy test compilation failed'}
 if($LASTEXITCODE -ne 0){throw 'Policy tests failed'}
 & $compiler /nologo /target:winexe /reference:System.Web.Extensions.dll "/out:$(Join-Path $PSScriptRoot 'PlayerProbe.exe')" (Join-Path $PSScriptRoot 'PlayerProbe.cs')
 if($LASTEXITCODE -ne 0){throw 'Probe compilation failed'}
-node --test (Join-Path $PSScriptRoot 'core.test.mjs') (Join-Path $PSScriptRoot 'worker.test.mjs') (Join-Path $PSScriptRoot 'playback.test.mjs') (Join-Path $PSScriptRoot 'protocol.test.mjs')
+node --test (Join-Path $PSScriptRoot 'core.test.mjs') (Join-Path $PSScriptRoot 'recovery.test.mjs') (Join-Path $PSScriptRoot 'worker.test.mjs') (Join-Path $PSScriptRoot 'playback.test.mjs') (Join-Path $PSScriptRoot 'protocol.test.mjs')
 if($LASTEXITCODE -ne 0){throw 'JS/protocol tests failed'}

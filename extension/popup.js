@@ -7,8 +7,8 @@ async function send(op,extra={}) {
   return r;
 }
 function action(id,fn){$(id).onclick=async()=>{try{await fn();}catch(e){status(e.message);}};}
-async function list(){
-  const r=await send('list'); $('items').replaceChildren();
+async function list(recover=true){
+  const r=await send('list',{recover}); $('items').replaceChildren();
   if(r.syncStatus)status(r.syncStatus);
   if(r.overflow) status('Слишком много потоков. Запустите новый поиск.');
   for(const x of r.items){
@@ -24,10 +24,10 @@ async function list(){
     }catch(e){status(e.message);}finally{b.disabled=!!r.overflow;}};
     row.append(text,b); $('items').append(row);
   }
-  if(!r.items.length) status('Поток пока не замечен. Запустите или перезапустите видео на сайте. Уже загруженные до включения расширения потоки могут быть недоступны.');
+  if(!r.items.length) status('Плейлист не найден. Запустите серию и нажмите «Обновить список». Если не помогло, перезагрузите страницу через Ctrl+Shift+R и снова запустите видео.');
 }
-action('refresh',list);
-action('clear',async()=>{await send('clear');await list();});
+action('refresh',()=>list());
+action('clear',async()=>{await send('clear');await list(false);});
 action('save',async()=>{
   const sites=[...new Set($('sites').value.split(/\s+/).filter(Boolean).map(v=>host(new URL(v.includes('://')?v:'https://'+v).hostname)))];
   if(!sites.length || sites.length>10) throw Error('Укажите от 1 до 10 сайтов.');

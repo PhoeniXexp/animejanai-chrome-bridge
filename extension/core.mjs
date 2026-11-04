@@ -14,6 +14,11 @@ export function safeUrl(raw) {
     return u;
   } catch { return null; }
 }
+// A page anchor selects a UI section, not a different media URL.
+export function safePageUrl(raw) {
+  if(typeof raw!=='string' || raw.length>8192) return null;
+  return safeUrl(raw.split('#',1)[0]);
+}
 export function rejection(details, session, frames, cfg, now = Date.now()) {
   const u = safeUrl(details.url);
   if (!u || !/\.(?:m3u8|mpd)$/i.test(u.pathname)) return 'invalid-playlist-url';
@@ -28,15 +33,20 @@ export function rejection(details, session, frames, cfg, now = Date.now()) {
   // Exact frame + initiator: nested ad frames and unrelated playlists fail closed.
   if (!fu) return 'frame-not-kodik';
   if(cfg.dynamicStreams){
-    const kodik=/(^|\.)kodikplayer\.com$/.test(fu.hostname) || /^\/(serial|video)\//.test(fu.pathname);
-    const aniboom=fu.hostname==='aniboom.one' && /^\/embed\/[a-zA-Z0-9_-]+\/?$/.test(fu.pathname);
-    if(!kodik && !aniboom) return 'frame-not-supported';
+    if(!supportedPlayerFrame(f.url,cfg)) return 'frame-not-supported';
     if(!initiator || initiator.origin!==fu.origin) return 'initiator-not-kodik';
   }else{
     if(!cfg.kodik.includes(fu.hostname)) return 'frame-not-kodik';
     if(!initiator || !cfg.kodik.includes(initiator.hostname)) return 'initiator-not-kodik';
   }
   return null;
+}
+export function supportedPlayerFrame(raw,cfg) {
+  const u=safeUrl(raw);
+  if(!u) return false;
+  if(!cfg?.dynamicStreams) return !!cfg?.kodik?.includes(u.hostname);
+  return /(^|\.)kodikplayer\.com$/.test(u.hostname) || /^\/(serial|video)\//.test(u.pathname) ||
+    (u.hostname==='aniboom.one' && /^\/embed\/[a-zA-Z0-9_-]+\/?$/.test(u.pathname));
 }
 export function accept(details, session, frames, cfg, now = Date.now()) {
   return rejection(details, session, frames, cfg, now) === null;
