@@ -1,8 +1,14 @@
 // Runs only in the selected player document, in Chrome's isolated world.
 export function pauseAndReadPosition() {
-  const videos=[...document.querySelectorAll('video')].filter(v=>{
+  const roots=[document],allVideos=[];
+  for(const root of roots) {
+    allVideos.push(...root.querySelectorAll('video'));
+    for(const element of root.querySelectorAll('*')) if(element.shadowRoot) roots.push(element.shadowRoot);
+  }
+  const videos=allVideos.filter(v=>{
     const r=v.getBoundingClientRect();
-    return r.width>0 && r.height>0 && v.readyState>=1 && !v.ended;
+    return r.width>0 && r.height>0 && v.readyState>=1 && !v.ended &&
+      (!v.checkVisibility || v.checkVisibility({checkOpacity:true,checkVisibilityCSS:true}));
   });
   // Snapshot before pause handlers can modify the player's state.
   const v=videos.length===1 ? videos[0] : null;

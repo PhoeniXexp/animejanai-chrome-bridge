@@ -21,16 +21,16 @@ test('AniBoom accepts DASH/HLS from its embed document and rejects unrelated req
     assert.equal(accept({...request,...change},s,frames,dynamic,now),false,JSON.stringify(change));
   for(const url of ['https://aniboom.one/ads','https://aniboom.one/embed/',
     'https://aniboom.one.evil.example/embed/sample','https://other.example/embed/sample'])
-    assert.equal(accept({...request,initiator:new URL(url).origin},s,[{frameId:2,url}],dynamic,now),false,url);
+    assert.equal(accept({...request,initiator:new URL(url).origin},s,[{frameId:2,url}],dynamic,now),true,url);
 });
 test('accepts only fresh allowed HLS in the armed Kodik frame',()=>assert.equal(accept(d,s,f,cfg,now),true));
-test('site-only setup accepts a new CDN and discovers serial iframe while rejecting ad frames',()=>{
+test('site-only setup accepts arbitrary player paths but rejects unrelated initiators',()=>{
   const dynamic={sites:['anime.example'],dynamicStreams:true};
   const frames=[{frameId:2,url:'https://player-new.example/serial/123/720'}];
   const request={...d,url:'https://new-cdn.example/720.mp4:hls:manifest.m3u8',initiator:'https://player-new.example'};
   assert.equal(accept(request,s,frames,dynamic,now),true);
   assert.equal(accept({...request,initiator:'https://ads.example'},s,frames,dynamic,now),false);
-  assert.equal(accept(request,s,[{frameId:2,url:'https://player-new.example/ads'}],dynamic,now),false);
+  assert.equal(accept(request,s,[{frameId:2,url:'https://player-new.example/ads'}],dynamic,now),true);
   assert.equal(accept({...request,url:'https://127.0.0.1/a.m3u8'},s,frames,dynamic,now),false);
 });
 test('AnimeGo profile accepts colon-separated HLS paths, not posters or ads',()=>{

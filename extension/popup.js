@@ -1,4 +1,4 @@
-import {host,label} from './core.mjs';
+import {host} from './core.mjs';
 const $ = id=>document.getElementById(id);
 const status = t=>{$('status').textContent=t;};
 async function send(op,extra={}) {
@@ -9,22 +9,26 @@ async function send(op,extra={}) {
 function action(id,fn){$(id).onclick=async()=>{try{await fn();}catch(e){status(e.message);}};}
 async function list(recover=true){
   const r=await send('list',{recover}); $('items').replaceChildren();
-  if(r.syncStatus)status(r.syncStatus);
+  status(r.syncStatus || '');
   if(r.overflow) status('Слишком много потоков. Запустите новый поиск.');
-  for(const x of r.items){
+  for(const [index,x] of r.items.entries()){
     const row=document.createElement('div'); row.className='item';
-    const text=document.createElement('div'); text.textContent=label(x.url);
-    const b=document.createElement('button'); b.textContent='Открыть этот поток'; b.disabled=!!r.overflow;
+    const url=new URL(x.url);
+    const heading=document.createElement('strong');
+    heading.textContent=`Вариант ${index+1} · ${/\.mpd$/i.test(url.pathname)?'DASH':'HLS'}`;
+    const text=document.createElement('div'); text.textContent=url.hostname;
+    const b=document.createElement('button'); b.textContent='Открыть в плеере'; b.disabled=!!r.overflow;
     b.onclick=async()=>{try{
       b.disabled=true;
       const result=await send('open',{id:x.id});
       const format=t=>`${Math.floor(t/60)}:${String(Math.floor(t%60)).padStart(2,'0')}`;
-      const time=format(result.startSeconds),captured=format(result.capturedSeconds);
-      status(result.dryRun?`Браузер на паузе (${captured}), передано ${time} (−5 сек). DryRun: плеер не запущен.`:`Браузер на паузе (${captured}). Плееру передан запуск с ${time} (−5 сек). Проверьте воспроизведение.`);
+      const time=format(result.startSeconds);
+      status(result.dryRun?'Тестовый режим: запуск отключён.':`Передано с ${time}. Браузер на паузе.`);
     }catch(e){status(e.message);}finally{b.disabled=!!r.overflow;}};
-    row.append(text,b); $('items').append(row);
+    row.append(heading,text,b); $('items').append(row);
   }
-  if(!r.items.length) status('Плейлист не найден. Запустите серию и нажмите «Обновить список». Если не помогло, перезагрузите страницу через Ctrl+Shift+R и снова запустите видео.');
+  if(r.items.length>1 && !r.overflow && !r.syncStatus) status('Выберите поток. Среди вариантов может быть реклама.');
+  if(!r.items.length) status('Поток не найден. Запустите видео и обновите список.');
 }
 action('refresh',()=>list());
 action('clear',async()=>{await send('clear');await list(false);});
@@ -38,9 +42,9 @@ action('save',async()=>{
   const removed=(old.origins||[]).filter(x=>!origins.includes(x));
   if(removed.length) await chrome.permissions.remove({origins:removed});
   cfg.autoCapture=$('autoCapture').checked;
-  await chrome.storage.local.set({config:cfg});await send('resetAll');status('Настройки сохранены. Запустите видео на сайте.');
+  await chrome.storage.local.set({config:cfg});await send('resetAll');status('Сохранено.');
 });
-action('connection',async()=>{const r=await send('ping');status(`Хост ${r.version || '?'} отвечает. ${r.dryRun?'Тестовый режим: запуск отключён.':'Запуск плеера включён.'}`);});
+action('connection',async()=>{const r=await send('ping');status(`Хост ${r.version || '?'}: ${r.dryRun?'запуск отключён':'подключён'}.`);});
 action('revoke',async()=>{const p=await chrome.permissions.getAll();if(p.origins?.length) await chrome.permissions.remove({origins:p.origins});await chrome.storage.local.clear();await send('resetAll');$('sites').value='';status('Доступ отозван.');});
 const {config}=await chrome.storage.local.get('config');
 $('sites').value=config?.sites?.join('\n') || 'https://animego.online';

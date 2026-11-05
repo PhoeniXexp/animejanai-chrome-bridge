@@ -25,12 +25,12 @@ export function rejection(details, session, frames, cfg, now = Date.now()) {
   if (!cfg?.dynamicStreams && !cfg?.cdn?.includes(u.hostname)) return 'cdn-not-allowed';
   if (!session || session.tabId !== details.tabId) return 'wrong-tab';
   if (now - session.started > WINDOW_MS || now < session.started || details.timeStamp < session.started) return 'outside-search-window';
-  if (details.frameId <= 0) return 'no-player-frame';
+  if (!Number.isInteger(details.frameId) || details.frameId < 0) return 'no-player-frame';
   if (details.statusCode < 200 || details.statusCode >= 300) return 'http-not-success';
   const f = frames.find(f => f.frameId === details.frameId);
-  const fu = f && safeUrl(f.url);
+  const fu = f && safePageUrl(f.url);
   const initiator = safeUrl(details.initiator);
-  // Exact frame + initiator: nested ad frames and unrelated playlists fail closed.
+  // Match the requesting document, not a player brand or URL path.
   if (!fu) return 'frame-not-kodik';
   if(cfg.dynamicStreams){
     if(!supportedPlayerFrame(f.url,cfg)) return 'frame-not-supported';
@@ -42,11 +42,10 @@ export function rejection(details, session, frames, cfg, now = Date.now()) {
   return null;
 }
 export function supportedPlayerFrame(raw,cfg) {
-  const u=safeUrl(raw);
+  const u=safePageUrl(raw);
   if(!u) return false;
   if(!cfg?.dynamicStreams) return !!cfg?.kodik?.includes(u.hostname);
-  return /(^|\.)kodikplayer\.com$/.test(u.hostname) || /^\/(serial|video)\//.test(u.pathname) ||
-    (u.hostname==='aniboom.one' && /^\/embed\/[a-zA-Z0-9_-]+\/?$/.test(u.pathname));
+  return true;
 }
 export function accept(details, session, frames, cfg, now = Date.now()) {
   return rejection(details, session, frames, cfg, now) === null;

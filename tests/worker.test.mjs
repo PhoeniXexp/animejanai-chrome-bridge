@@ -5,15 +5,20 @@ globalThis.crypto ??= webcrypto;
 test('worker capture, tab isolation, safe launch, cooldown, navigation and expiry',async()=>{
   const handlers={};const local={config:{sites:['anime.example'],kodik:['kodik.example'],cdn:['cdn.example']}};const session={};
   let active=4,nativeCalls=0;
+  let pauseScript=async()=>[{result:{ok:true,startSeconds:152.25}}];
   const tab={id:4,url:'https://anime.example/episode',incognito:false};
   const area=data=>({async get(k){return structuredClone({[k]:data[k]});},async set(x){Object.assign(data,structuredClone(x));},async remove(k){delete data[k];}});
   const event=key=>({addListener(fn){handlers[key]=fn;}});
   const sender={id:'test-id',url:'chrome-extension://test-id/popup.html'};
   globalThis.chrome={
-    scripting:{async executeScript(){return [{result:{ok:true,startSeconds:152.25}}];}},
+    scripting:{async executeScript(args){
+      if(args.func.name==='readLoadedPlaylists')return [];
+      if(args.func.name==='inspectVideo')return (await chrome.webNavigation.getAllFrames()).map(f=>({frameId:f.frameId,documentId:f.documentId,result:{frameUrl:f.url,count:1}}));
+      return pauseScript(args);
+    }},
     storage:{local:area(local),session:area(session)},
     tabs:{async get(){return tab;},async query(){return [{...tab,id:active}];},onRemoved:event('removed')},
-    webNavigation:{async getAllFrames(){return [{frameId:2,parentFrameId:0,url:'https://kodik.example/episode?token=do-not-export'}];},onCommitted:event('committed')},
+    webNavigation:{async getAllFrames(){return [{frameId:2,parentFrameId:0,documentId:'kodik-doc',url:'https://kodik.example/episode?token=do-not-export'}];},onCommitted:event('committed')},
     webRequest:{onBeforeRequest:event('started'),onBeforeRedirect:event('redirect'),onErrorOccurred:event('network-error'),onCompleted:event('completed')},alarms:{onAlarm:event('alarm'),async create(){}},
     permissions:{async contains(){return true;}},
     runtime:{id:'test-id',getURL:p=>`chrome-extension://test-id/${p}`,onMessage:event('message'),async sendNativeMessage(_host,msg){nativeCalls++;return {ok:true,dryRun:true};}}
@@ -47,7 +52,7 @@ test('worker capture, tab isolation, safe launch, cooldown, navigation and expir
   await send('arm');handlers.completed({...d,timeStamp:Date.now()+1});
   const fresh=(await send('list')).items[0];
   let paused=false;
-  chrome.scripting.executeScript=async()=>{paused=true;return [{result:{ok:true,startSeconds:152.25}}];};
+  pauseScript=async()=>{paused=true;return [{result:{ok:true,startSeconds:152.25}}];};
   chrome.runtime.sendNativeMessage=async(_h,m)=>{assert.equal(paused,true);assert.equal(m.startSeconds,152.25);throw Error('Native host has exited.');};
   assert.match((await send('open',{id:fresh.id})).error,/Браузер на паузе/);
   await send('clear');
@@ -60,7 +65,7 @@ test('worker capture, tab isolation, safe launch, cooldown, navigation and expir
   assert.equal((await send('list')).items[0].url,d.url,'another tab cannot replace current stream');
   active=5;assert.match((await send('list')).items[0].url,/second/);
   active=4;handlers.completed({...d,timeStamp:Date.now()+1,url:'https://cdn.example/new-episode.m3u8'});
-  const replaced=await send('list');assert.equal(replaced.items.length,1);assert.match(replaced.items[0].url,/new-episode/);
+  const replaced=await send('list');assert.equal(replaced.items.length,2);assert.match(replaced.items[0].url,/new-episode/);
   await send('clear');local.config.autoCapture=false;handlers.completed({...d,timeStamp:Date.now()+1});
   assert.equal((await send('list')).items.length,0,'auto capture can be disabled');
   local.config.autoCapture=true;tab.url='https://unrelated.example/';handlers.completed({...d,timeStamp:Date.now()+1});
@@ -77,7 +82,7 @@ test('worker capture, tab isolation, safe launch, cooldown, navigation and expir
   handlers.completed(dash);handlers.completed(dash);
   const dashList=await send('list');assert.equal(dashList.items.length,1,'DASH captured and deduplicated');
   paused=false;
-  chrome.scripting.executeScript=async({target})=>{
+  pauseScript=async({target})=>{
     assert.deepEqual(target,{tabId:4,documentIds:['aniboom-doc']});
     paused=true;return [{result:{ok:true,startSeconds:152.25}}];
   };

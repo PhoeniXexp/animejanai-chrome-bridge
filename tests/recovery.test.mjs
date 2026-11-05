@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {readLoadedPlaylist} from '../extension/recovery.mjs';
+import {readLoadedPlaylists} from '../extension/recovery.mjs';
 import {safePageUrl,safeUrl,WINDOW_MS} from '../extension/core.mjs';
 
 test('reads the latest loaded manifest, without treating chunks or failed loads as playlists',()=>{
@@ -15,12 +15,13 @@ test('reads the latest loaded manifest, without treating chunks or failed loads 
   globalThis.location={href:'https://aniboom.one/embed/sample'};
   Object.defineProperty(globalThis,'performance',{configurable:true,value:{timeOrigin:1000,getEntriesByType:()=>entries}});
   try {
-    assert.deepEqual(readLoadedPlaylist(),{url:entries[1].name,timeStamp:1030,frameUrl:location.href});
-    videos=[video,video];assert.equal(readLoadedPlaylist(),null,'ambiguous videos rejected');
-    videos=[{...video,readyState:0}];assert.equal(readLoadedPlaylist(),null,'not loaded');
+    assert.deepEqual(readLoadedPlaylists()[0],{url:entries[1].name,timeStamp:1030,frameUrl:location.href});
+    assert.equal(readLoadedPlaylists().length,2);
+    videos=[video,video];assert.equal(readLoadedPlaylists().length,2,'candidates retained; launch handles ambiguous videos');
+    videos=[{...video,readyState:0}];assert.deepEqual(readLoadedPlaylists(),[],'not loaded');
     videos=[video];entries=[{...entry,responseStatus:0}];
-    assert.equal(readLoadedPlaylist().url,entry.name,'cross-origin resource timing without exposed HTTP status');
-    entries=[{...entry,responseEnd:0}];assert.equal(readLoadedPlaylist(),null);
+    assert.equal(readLoadedPlaylists()[0].url,entry.name,'cross-origin resource timing without exposed HTTP status');
+    entries=[{...entry,responseEnd:0}];assert.deepEqual(readLoadedPlaylists(),[]);
     assert.equal(safePageUrl('https://animego.me/anime/sample#player').href,'https://animego.me/anime/sample');
     assert.equal(safeUrl('https://cdn.example/a.mpd#player'),null,'media fragment still rejected');
   } finally {
@@ -42,12 +43,13 @@ test('recovers after lost capture, validates documents and keeps stream after na
     tabs:{query:async()=>[{...tab}],get:async()=>({...tab}),onRemoved:event('removed')},
     alarms:{onAlarm:event('alarm'),create:async()=>{}},permissions:{contains:async()=>true},
     webNavigation:{getAllFrames:async()=>structuredClone(frames),onCommitted:event('committed')},
-    webRequest:{onCompleted:event('completed')},
+    webRequest:{onCompleted:event('completed'),onBeforeRedirect:event('redirect')},
     scripting:{async executeScript({target,func}){
       scripts++;assert.deepEqual(target,{tabId:4,documentIds:['doc-1']});
+      if(func.name==='inspectVideo')return [{frameId:8,documentId:'doc-1',result:{frameUrl:frames[0].url,count:1}}];
       if(func.name==='pauseAndReadPosition')return [{result:{ok:true,startSeconds:20}}];
       if(navigate)frames=[{...frames[0],documentId:'doc-2'}];
-      return [{frameId:8,documentId:'doc-1',result:sample}];
+      return [{frameId:8,documentId:'doc-1',result:[sample]}];
     }},
     runtime:{id:'test',getURL:p=>'chrome-extension://test/'+p,onMessage:event('message'),connectNative(){
       let onMessage;

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AnimeJaNai — Chrome bridge",
-  "version": "0.6.1",
+  "version": "0.7.3",
   "minimum_chrome_version": "120",
   "description": "Поиск HLS / DASH в выбранной вкладке и ручной запуск AnimeJaNai.",
   "permissions": ["activeTab", "storage", "webRequest", "webNavigation", "nativeMessaging", "alarms", "scripting"],
