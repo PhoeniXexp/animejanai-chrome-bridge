@@ -10,7 +10,9 @@ test('worker capture, tab isolation, safe launch, cooldown, navigation and expir
   const area=data=>({async get(k){return structuredClone({[k]:data[k]});},async set(x){Object.assign(data,structuredClone(x));},async remove(k){delete data[k];}});
   const event=key=>({addListener(fn){handlers[key]=fn;}});
   const sender={id:'test-id',url:'chrome-extension://test-id/popup.html'};
+  const badges=new Map();
   globalThis.chrome={
+    action:{async setBadgeText({tabId,text}){badges.set(tabId,text);}},
     scripting:{async executeScript(args){
       if(args.func.name==='readLoadedPlaylists')return [];
       if(args.func.name==='inspectVideo')return (await chrome.webNavigation.getAllFrames()).map(f=>({frameId:f.frameId,documentId:f.documentId,result:{frameUrl:f.url,count:1}}));
@@ -34,6 +36,8 @@ test('worker capture, tab isolation, safe launch, cooldown, navigation and expir
   const d={tabId:4,frameId:2,initiator:'https://kodik.example',timeStamp:Date.now()+1,statusCode:200,url:'https://cdn.example/720.m3u8?t=secret'};
   handlers.completed({...d,tabId:5});assert.equal((await send('list')).items.length,0);
   handlers.completed(d);handlers.completed(d);
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(badges.get(4),'1');
   let list=await send('list');assert.equal(list.items.length,1,'dedup');
   assert.equal((await send('open',{id:'invented',url:d.url})).ok,false);assert.equal(nativeCalls,0);
   active=5;assert.equal((await send('open',{id:list.items[0].id})).ok,false);assert.equal(nativeCalls,0);
@@ -66,7 +70,8 @@ test('worker capture, tab isolation, safe launch, cooldown, navigation and expir
   active=5;assert.match((await send('list')).items[0].url,/second/);
   active=4;handlers.completed({...d,timeStamp:Date.now()+1,url:'https://cdn.example/new-episode.m3u8'});
   const replaced=await send('list');assert.equal(replaced.items.length,2);assert.match(replaced.items[0].url,/new-episode/);
-  await send('clear');local.config.autoCapture=false;handlers.completed({...d,timeStamp:Date.now()+1});
+  assert.equal(badges.get(4),'2');assert.equal(badges.get(5),'1');
+  await send('clear');assert.equal(badges.get(4),'');local.config.autoCapture=false;handlers.completed({...d,timeStamp:Date.now()+1});
   assert.equal((await send('list')).items.length,0,'auto capture can be disabled');
   local.config.autoCapture=true;tab.url='https://unrelated.example/';handlers.completed({...d,timeStamp:Date.now()+1});
   assert.equal((await send('list')).items.length,0,'unconfigured top-level page is ignored');

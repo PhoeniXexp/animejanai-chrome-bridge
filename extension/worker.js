@@ -23,7 +23,17 @@ const activeId=async()=>(await chrome.tabs.query({active:true,currentWindow:true
 const captureKey=id=>`capture:${id}`;
 const read=async(id)=>{id ??= await activeId();return (await chrome.storage.session.get(captureKey(id)))[captureKey(id)];};
 const save=async(s)=>chrome.storage.session.set({[captureKey(s.tabId)]:s});
-const drop=async(id)=>chrome.storage.session.remove(captureKey(id ?? await activeId()));
+async function showCount(tabId,count) {
+  if (!Number.isInteger(tabId)) return;
+  try {
+    await chrome.action.setBadgeText({tabId,text:count ? String(count) : ''});
+  } catch { /* The tab may have closed during capture. */ }
+}
+async function drop(id) {
+  id ??= await activeId();
+  await chrome.storage.session.remove(captureKey(id));
+  await showCount(id,0);
+}
 chrome.alarms.onAlarm.addListener(alarm => {
   if (alarm.name.startsWith('capture-expiry:')) void serial(async () => {
     const id=Number(alarm.name.split(':')[1]);
@@ -114,6 +124,7 @@ function observe(d,redirect=false) {
         s.redirects=redirects;
         s.items=mergeRedirectedItems(s.items,redirects);
         await save(s);
+        await showCount(s.tabId,s.items.length);
         return;
       }
       const url=canonicalPlaylist(d.url,frame,s.redirects);
@@ -125,6 +136,7 @@ function observe(d,redirect=false) {
         s.items.unshift({id:crypto.randomUUID(),url,frameId:d.frameId,frameUrl:frame.url,documentId:frame.documentId,seen:Date.now()});
         s.items=s.items.slice(0,20);
         await save(s);
+        await showCount(s.tabId,s.items.length);
       }
     } catch { /* Closed tab or navigation: ignore. */ }
   });
@@ -142,7 +154,12 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (sender.id !== chrome.runtime.id || sender.url !== chrome.runtime.getURL('popup.html')) return false;
   serial(async () => {
     if (msg.op === 'clear') { await drop(); return {}; }
-    if (msg.op === 'resetAll') { await chrome.storage.session.clear(); return {}; }
+    if (msg.op === 'resetAll') {
+      await chrome.storage.session.clear();
+      const tabs=await chrome.tabs.query({});
+      await Promise.all(tabs.map(tab=>showCount(tab.id,0)));
+      return {};
+    }
     if (msg.op === 'ping') return chrome.runtime.sendNativeMessage(HOST,{op:'ping'});
     if (msg.op === 'arm') {
       const {config} = await chrome.storage.local.get('config');
@@ -152,6 +169,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       const origins = config.dynamicStreams ? ['https://*/*'] : [...config.sites,...config.kodik,...config.cdn].map(h=>`https://${h}/*`);
       if (!await chrome.permissions.contains({origins})) throw Error('Сохраните домены и разрешите доступ.');
       await save({tabId:tab.id,page:tab.url,started:Date.now(),items:[]});
+      await showCount(tab.id,0);
       await chrome.alarms.create(`capture-expiry:${tab.id}`,{when:Date.now()+WINDOW_MS});
       return {};
     }
@@ -159,7 +177,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     const [tab] = await chrome.tabs.query({active:true,currentWindow:true});
     const {config}=await chrome.storage.local.get('config');
     if(!tab || tab.incognito || !config?.sites?.includes(safePageUrl(tab.url)?.hostname)) {
-      if(msg.op==='list') return {items:[]};
+      if(msg.op==='list') { await showCount(tab?.id,0); return {items:[]}; }
       throw Error('Откройте настроенный сайт с видео.');
     }
     if (msg.op === 'list') {
@@ -170,6 +188,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       await current(s);
       const items=await visibleItems(tab,s.items,config);
       await current(s);
+      await showCount(tab.id,items.length);
       return {items, overflow:s.overflow,syncStatus:(await chrome.storage.session.get(`return:${tab.id}`))[`return:${tab.id}`]};
     }
     if (msg.op !== 'open') throw Error('Неизвестная команда.');

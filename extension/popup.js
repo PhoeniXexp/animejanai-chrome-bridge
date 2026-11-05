@@ -30,7 +30,6 @@ async function list(recover=true){
   if(r.items.length>1 && !r.overflow && !r.syncStatus) status('Выберите поток. Среди вариантов может быть реклама.');
   if(!r.items.length) status('Поток не найден. Запустите видео и обновите список.');
 }
-action('refresh',()=>list());
 action('clear',async()=>{await send('clear');await list(false);});
 action('save',async()=>{
   const sites=[...new Set($('sites').value.split(/\s+/).filter(Boolean).map(v=>host(new URL(v.includes('://')?v:'https://'+v).hostname)))];
